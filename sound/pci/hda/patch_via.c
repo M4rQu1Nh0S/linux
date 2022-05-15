@@ -66,6 +66,7 @@ enum VIA_HDA_CODEC {
 	VT1802,
 	VT1705CF,
 	VT1808,
+	VT1705,
 	CODEC_TYPES,
 };
 
@@ -169,6 +170,8 @@ static enum VIA_HDA_CODEC get_codec_type(struct hda_codec *codec)
 		codec_type = VT1705CF;
 	else if (dev_id == 0x4761 || dev_id == 0x4762)
 		codec_type = VT1808;
+	else if (dev_id == 0x4397)
+		codec_type = VT1705;
 	else
 		codec_type = UNKNOWN;
 	return codec_type;
@@ -348,6 +351,7 @@ static void __analog_low_current_mode(struct hda_codec *codec, bool force)
 		parm = enable ? 0x00 : 0xe0; /* 0x00: 4/40x, 0xe0: 1x */
 		break;
 	case VT1705CF:
+	case VT1705:
 	case VT1808:
 		verb = 0xf82;
 		parm = enable ? 0x00 : 0xe0;  /* 0x00: 4/40x, 0xe0: 1x */
@@ -731,9 +735,6 @@ static int patch_vt1708S(struct hda_codec *codec)
 	/* correct names for VT1708BCE */
 	if (get_codec_type(codec) == VT1708BCE)
 		snd_hda_codec_set_name(codec, "VT1708BCE");
-	/* correct names for VT1705 */
-	if (codec->core.vendor_id == 0x11064397)
-		snd_hda_codec_set_name(codec, "VT1705");
 
 	err = snd_hda_add_verbs(codec, vt1708S_init_verbs);
 	if (err < 0)
@@ -749,6 +750,46 @@ static int patch_vt1708S(struct hda_codec *codec)
  error:
 	via_free(codec);
 	return err;
+}
+
+/* Patch for VT1705 */
+static const struct hda_verb vt1705_init_verbs[] = {
+	/* mixer enable */
+	{0x1, 0xF88, 0x3},
+	/* GPIO 0~2 */
+	{0x1, 0xF82, 0x3F},
+	{ }
+};
+
+static int patch_vt1705(struct hda_codec *codec)
+{
+	struct via_spec *spec;
+	int err;
+
+	/* create a codec specific record */
+	spec = via_new_spec(codec);
+	if (spec == NULL)
+		return -ENOMEM;
+
+	spec->gen.mixer_nid = 0x16;
+	override_mic_boost(codec, 0x1a, 0, 3, 40);
+	override_mic_boost(codec, 0x1e, 0, 3, 40);
+	override_mic_boost(codec, 0x1b, 0, 3, 40);
+
+	err = snd_hda_add_verbs(codec, vt1705_init_verbs);
+	if (err < 0)
+		goto error;
+
+	/* automatic parse from the BIOS config */
+	err = via_parse_auto_config(codec);
+	if (err < 0)
+		goto error;
+
+	return 0;
+
+ error:
+	via_free(codec);
+	return err; 
 }
 
 /* Patch for VT1702 */
@@ -1211,7 +1252,7 @@ static const struct hda_device_id snd_hda_id_via[] = {
 	HDA_CODEC_ENTRY(0x11061397, "VT1708S", patch_vt1708S),
 	HDA_CODEC_ENTRY(0x11062397, "VT1708S", patch_vt1708S),
 	HDA_CODEC_ENTRY(0x11063397, "VT1708S", patch_vt1708S),
-	HDA_CODEC_ENTRY(0x11064397, "VT1705", patch_vt1708S),
+	HDA_CODEC_ENTRY(0x11064397, "VT1705", patch_vt1705),
 	HDA_CODEC_ENTRY(0x11065397, "VT1708S", patch_vt1708S),
 	HDA_CODEC_ENTRY(0x11066397, "VT1708S", patch_vt1708S),
 	HDA_CODEC_ENTRY(0x11067397, "VT1708S", patch_vt1708S),
